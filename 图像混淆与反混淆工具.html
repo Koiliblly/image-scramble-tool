@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图像混淆 · 反混淆工具</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2315202f'/%3E%3Cg fill='%2322d3ee'%3E%3Crect x='6' y='6' width='9' height='9' rx='2'/%3E%3Crect x='17' y='17' width='9' height='9' rx='2'/%3E%3C/g%3E%3Cg fill='%238ea3b8'%3E%3Crect x='17' y='6' width='9' height='9' rx='2'/%3E%3Crect x='6' y='17' width='9' height='9' rx='2'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0e1521; --bg2:#111a28;
+  --panel:#15202f; --panel-hi:#1a2739;
+  --line:#24344a; --line-soft:#1d2b3d;
+  --text:#e6edf5; --muted:#8ea3b8; --faint:#5f7489;
+  --accent:#22d3ee; --accent-ink:#062b33;
+  --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{color-scheme:dark;}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:"Segoe UI","Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;
+  font-size:14px; line-height:1.55; min-height:100vh;
+}
+::selection{background:rgba(34,211,238,.3);}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+.hidden{display:none !important;}
+.mono{font-family:"Cascadia Mono",Consolas,monospace;}
+
+.app{max-width:1440px;margin:0 auto;padding:22px 20px 40px;}
+
+/* ===== header ===== */
+header.top{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand svg{width:30px;height:30px;flex:none;}
+.brand h1{font-size:20px;font-weight:700;letter-spacing:.02em;}
+.brand small{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:1px;}
+.badge{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 12px;}
+
+/* ===== steps ===== */
+.steps{display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 18px;margin-bottom:18px;}
+.step{display:flex;align-items:center;gap:10px;flex:none;}
+.step .num{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);color:var(--faint);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;transition:border-color .15s, background .15s, color .15s;position:relative;}
+.step .step-txt b{font-size:13px;font-weight:600;display:block;}
+.step .step-txt i{font-style:normal;font-size:11px;color:var(--faint);display:block;}
+.step-line{flex:1;height:2px;background:var(--line-soft);transition:background .2s;}
+.step-line.done{background:var(--accent);}
+.step.done .num{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);}
+.step.done .num::after{content:"✓";font-size:12px;font-weight:700;}
+.step.done .step-txt b{color:var(--accent);}
+.step.current .num{border-color:var(--accent);color:var(--accent);}
+.step.current .step-txt b{color:var(--accent);}
+@media (max-width:600px){ .step-line{display:none;} .steps{flex-wrap:wrap;gap:10px 18px;} }
+
+/* ===== layout ===== */
+.layout{display:grid;grid-template-columns:400px minmax(0,1fr);gap:18px;align-items:stretch;}
+.layout > section{min-width:0;}
+@media (max-width:1200px){ .layout{grid-template-columns:1fr;} }
+
+.preview-col{display:flex;flex-direction:column;}
+.preview-grid{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;grid-auto-rows:minmax(0,1fr);}
+@media (max-width:860px){ .preview-grid{grid-template-columns:1fr;} }
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;}
+.card-title{font-size:13px;font-weight:700;margin-bottom:12px;}
+.card-title::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:8px;vertical-align:1px;}
+
+/* ===== dropzone ===== */
+.dropzone{
+  border:1.5px dashed var(--line); border-radius:12px;
+  padding:26px 16px; text-align:center; cursor:pointer;
+  transition:border-color .15s, background .15s;
+  min-height:132px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+}
+.dropzone:hover{border-color:#31465f;}
+.dropzone.dragover{border-color:var(--accent);background:rgba(34,211,238,.06);}
+.dropzone svg{width:30px;height:30px;color:var(--faint);}
+.dropzone .dz-main{font-size:13px;color:var(--text);}
+.dropzone .dz-sub{font-size:12px;color:var(--faint);}
+.btn-row{display:flex;gap:10px;margin-top:10px;}
+.btn-row .btn{flex:1;}
+
+/* ===== buttons ===== */
+.btn{
+  border:0; border-radius:10px; padding:11px 16px; font-size:14px; font-weight:600;
+  cursor:pointer; font-family:inherit; transition:filter .15s, background .15s, border-color .15s;
+}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.btn:not(:disabled):hover{filter:brightness(1.09);}
+.btn.primary{background:var(--accent);color:var(--accent-ink);}
+.btn.secondary{background:transparent;color:var(--accent);border:1px solid var(--accent);}
+.btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);}
+.btn.small{padding:6px 12px;font-size:12px;border-radius:8px;font-weight:600;}
+.actions{display:flex;gap:10px;margin-top:4px;}
+.actions .btn{flex:1;}
+
+/* ===== method cards ===== */
+.method{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;cursor:pointer;transition:border-color .15s, background .15s;margin-bottom:10px;}
+.method:hover{border-color:#31465f;}
+.method input{position:absolute;opacity:0;pointer-events:none;}
+.method .dot{width:18px;height:18px;border-radius:50%;border:2px solid #46596f;flex:none;margin-top:2px;position:relative;}
+.method input:checked + .dot{border-color:var(--accent);}
+.method input:checked + .dot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent);}
+.method.selected{border-color:var(--accent);background:rgba(34,211,238,.06);}
+.method .m-title{font-size:14px;font-weight:600;}
+.method .m-desc{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.55;}
+
+/* ===== params ===== */
+.param{margin-top:12px;}
+.param .p-label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;}
+input[type="text"], select{
+  width:100%; background:var(--bg2); border:1px solid var(--line); color:var(--text);
+  border-radius:8px; padding:9px 10px; font-size:16px; font-family:inherit;
+}
+select{cursor:pointer;}
+input[type="text"]:focus, select:focus{outline:none;border-color:var(--accent);}
+.range-row{display:flex;align-items:center;gap:12px;}
+input[type="range"]{flex:1;accent-color:var(--accent);height:24px;cursor:pointer;}
+.range-val{min-width:36px;text-align:right;color:var(--accent);font-size:13px;}
+.p-hint{font-size:12px;color:var(--faint);margin-top:6px;line-height:1.55;}
+
+/* ===== key box / status ===== */
+.keybox{border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted);background:var(--bg2);margin-top:14px;line-height:1.7;}
+.keybox .k-title{font-weight:600;color:var(--text);}
+.keybox b{color:var(--text);font-weight:600;}
+.status{font-size:13px;margin-top:12px;min-height:20px;color:var(--muted);}
+.status.ok{color:var(--ok);}
+.status.warn{color:var(--warn);}
+
+/* ===== tips ===== */
+.tips{list-style:none;display:flex;flex-direction:column;gap:9px;font-size:12.5px;color:var(--muted);line-height:1.6;}
+.tips li{display:flex;gap:9px;}
+.tips li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent);margin-top:8px;flex:none;}
+
+/* ===== preview panels ===== */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;}
+.p-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.p-title{font-size:13px;font-weight:700;}
+.p-meta{font-size:11px;color:var(--faint);font-family:"Cascadia Mono",Consolas,monospace;text-align:right;}
+.canvas-wrap{
+  position:relative;
+  background:repeating-conic-gradient(#1a2433 0% 25%,#151e2b 0% 50%) 0 0 / 16px 16px;
+  border:1px solid var(--line); border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  min-height:220px; padding:10px; overflow:hidden; flex:1;
+}
+.canvas-wrap canvas{max-width:100%;max-height:100%;width:auto;height:auto;display:block;position:relative;z-index:1;}
+.canvas-wrap .ph{position:absolute;font-size:12px;color:var(--faint);letter-spacing:.04em;}
+.p-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.p-foot .p-extra{font-size:11px;color:var(--faint);}
+
+/* ===== footer ===== */
+details.foot{margin-top:18px;border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;}
+details.foot summary{cursor:pointer;padding:14px 16px;font-size:14px;font-weight:700;list-style:none;user-select:none;}
+details.foot summary::-webkit-details-marker{display:none;}
+details.foot summary::after{content:"＋";float:right;color:var(--faint);font-weight:400;}
+details.foot[open] summary::after{content:"－";}
+.foot-body{padding:2px 18px 18px;font-size:13px;color:var(--muted);line-height:1.85;border-top:1px solid var(--line-soft);padding-top:14px;}
+.foot-body h4{color:var(--text);font-size:13px;margin:10px 0 4px;}
+.foot-body ul{padding-left:20px;}
+
+/* ===== toast ===== */
+.toast{
+  position:fixed; left:50%; bottom:30px; transform:translate(-50%,16px);
+  background:#15202f; border:1px solid var(--line); color:var(--text);
+  padding:11px 20px; border-radius:10px; font-size:14px; z-index:60;
+  opacity:0; pointer-events:none; transition:opacity .2s, transform .2s;
+  box-shadow:0 10px 30px rgba(0,0,0,.4); max-width:80vw;
+}
+.toast.show{opacity:1; transform:translate(-50%,0);}
+.toast.ok{border-color:var(--ok);}
+.toast.warn{border-color:var(--warn);}
+
+@media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6" fill="#15202f"/><g fill="#22d3ee"><rect x="6" y="6" width="9" height="9" rx="2"/><rect x="17" y="17" width="9" height="9" rx="2"/></g><g fill="#8ea3b8"><rect x="17" y="6" width="9" height="9" rx="2"/><rect x="6" y="17" width="9" height="9" rx="2"/></g></svg>
+      <h1>图像混淆 · 反混淆工具<small>三种置乱算法 · 无损还原校验</small></h1>
+    </div>
+    <span class="badge">本地处理 · 图片不上传</span>
+  </header>
+
+  <nav class="steps" aria-label="操作流程">
+    <div class="step current" id="step-1"><span class="num">1</span><span class="step-txt"><b>载入图片</b><i id="st1-txt">待操作</i></span></div>
+    <span class="step-line" id="line-1"></span>
+    <div class="step" id="step-2"><span class="num">2</span><span class="step-txt"><b>生成混淆图</b><i id="st2-txt">等待图片</i></span></div>
+    <span class="step-line" id="line-2"></span>
+    <div class="step" id="step-3"><span class="num">3</span><span class="step-txt"><b>反混淆还原</b><i id="st3-txt">等待混淆</i></span></div>
+  </nav>
+
+  <div class="layout">
+
+    <!-- ===== 控制台 ===== -->
+    <section aria-label="控制台">
+      <div class="card">
+        <div class="card-title">载入图片</div>
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="点击或拖拽图片到此处">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round"/></svg>
+          <div class="dz-main">点击或拖拽图片到此处</div>
+          <div class="dz-sub">PNG / JPG / WebP 等浏览器可解码的图片</div>
+        </div>
+        <input type="file" id="file-input" accept="image/*" class="hidden">
+        <div class="btn-row">
+          <button class="btn ghost" id="btn-demo" type="button">使用示例图</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">混淆算法</div>
+
+        <label class="method" data-method="arnold">
+          <input type="radio" name="method" value="arnold" checked>
+          <span class="dot" aria-hidden="true"></span>
+          <span>
+            <span class="m-title">Arnold 猫脸变换</span>
+            <span class="m-desc">经典二维置乱变换，按迭代次数打乱像素坐标；迭代次数即密钥，非方形图片自动补透明边处理。</span>
+          </span>
+        </label>
+
+        <label class="method" data-method="pixel">
+          <input type="radio" name="method" value="pixel">
+          <span class="dot" aria-hidden="true"></span>
+          <span>
+            <span class="m-title">像素随机置乱</span>
+            <span class="m-desc">按随机种子对全部像素做均匀置换，效果最彻底（雪花噪点）；随机种子即密钥。</span>
+          </span>
+        </label>
+
+        <label class="method" data-method="block">
+          <input type="radio" name="method" value="block">
+          <span class="dot" aria-hidden="true"></span>
+          <span>
+            <span class="m-title">分块置乱（拼图式）</span>
+            <span class="m-desc">将图像切成小方块后随机打乱顺序，保留块内结构；种子 + 块大小即密钥。</span>
+          </span>
+        </label>
+
+        <div class="param" id="params-arnold">
+          <label class="p-label" for="arnold-iters">迭代次数（密钥 N）</label>
+          <div class="range-row">
+            <input type="range" id="arnold-iters" min="1" max="30" step="1" value="8">
+            <span class="range-val mono" id="arnold-iters-val">8</span>
+          </div>
+          <p class="p-hint">次数越多置乱越彻底；还原必须使用相同的迭代次数。</p>
+        </div>
+
+        <div class="param hidden" id="params-pixel">
+          <label class="p-label" for="pixel-seed">随机种子（密钥）</label>
+          <input type="text" id="pixel-seed" placeholder="留空则自动生成" spellcheck="false">
+          <p class="p-hint">相同种子生成的置乱结果可被唯一还原。</p>
+        </div>
+
+        <div class="param hidden" id="params-block">
+          <label class="p-label" for="block-seed">随机种子（密钥）</label>
+          <input type="text" id="block-seed" placeholder="留空则自动生成" spellcheck="false">
+          <label class="p-label" for="block-size" style="margin-top:12px;">块大小</label>
+          <select id="block-size">
+            <option value="16">16 px</option>
+            <option value="32" selected>32 px</option>
+            <option value="64">64 px</option>
+            <option value="128">128 px</option>
+            <option value="256">256 px</option>
+          </select>
+          <p class="p-hint">块越小打乱越碎；还原需使用相同的种子与块大小。</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">操作</div>
+        <div class="actions">
+          <button class="btn primary" id="btn-scramble" type="button" disabled>生成混淆图</button>
+          <button class="btn secondary" id="btn-restore" type="button" disabled>反混淆还原</button>
+        </div>
+        <button class="btn ghost" id="btn-reset" type="button" style="width:100%;margin-top:10px;" disabled>重置</button>
+
+        <div class="keybox" id="keybox">
+          <div id="key-line1" class="k-title">尚未生成混淆图</div>
+          <div id="key-line2"></div>
+        </div>
+        <div class="status" id="status">载入图片后即可开始：生成混淆图 → 反混淆还原</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">使用提示</div>
+        <ul class="tips">
+          <li>每次混淆的密钥（迭代次数 / 随机种子 / 块大小）是还原的关键，混淆后留意下方密钥栏。</li>
+          <li>非方形图片会自动补透明边，还原后裁回原尺寸，不影响无损性。</li>
+          <li>下载请用各面板的 PNG 按钮；PNG 为无损格式，传回后仍可还原。</li>
+          <li>全部处理在浏览器本地完成，图片不会上传。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===== 预览 ===== -->
+    <section class="preview-col" aria-label="预览">
+      <div class="preview-grid">
+        <div class="panel">
+          <div class="p-head"><span class="p-title">原图</span><span class="p-meta" id="meta-orig">—</span></div>
+          <div class="canvas-wrap" id="wrap-orig"><span class="ph">尚未载入</span><canvas id="cv-orig" width="1" height="1"></canvas></div>
+          <div class="p-foot">
+            <button class="btn small ghost" id="btn-dl-orig" type="button" disabled>下载原图</button>
+            <span class="p-extra"></span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="p-head"><span class="p-title">混淆图</span><span class="p-meta" id="meta-scram">—</span></div>
+          <div class="canvas-wrap" id="wrap-scram"><span class="ph">生成后显示</span><canvas id="cv-scram" width="1" height="1"></canvas></div>
+          <div class="p-foot">
+            <button class="btn small ghost" id="btn-dl-scram" type="button" disabled>下载混淆图</button>
+            <span class="p-extra" id="extra-scram"></span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="p-head"><span class="p-title">还原图</span><span class="p-meta" id="meta-restored">—</span></div>
+          <div class="canvas-wrap" id="wrap-restored"><span class="ph">还原后显示</span><canvas id="cv-restored" width="1" height="1"></canvas></div>
+          <div class="p-foot">
+            <button class="btn small ghost" id="btn-dl-restored" type="button" disabled>下载还原图</button>
+            <span class="p-extra" id="extra-restored"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== 原理说明 ===== -->
+  <details class="foot">
+    <summary>原理说明与使用提示</summary>
+    <div class="foot-body">
+      <h4>三种算法</h4>
+      <ul>
+        <li><b>Arnold 猫脸变换</b>：像素坐标经 (x, y) → (x+y, x+2y) mod S 迭代置乱。因为变换可逆，用相同迭代次数逆向执行即可无损还原。非方形图片会补透明边到正方形，还原后自动裁回原尺寸。</li>
+        <li><b>像素随机置乱</b>：用随机种子通过 Fisher-Yates 算法对全部像素位置做均匀置换。种子相同则置换序列完全相同，可无损还原。</li>
+        <li><b>分块置乱</b>：把图像切成小方块后按种子打乱块顺序，边角不足处补透明像素，效果类似拼图被打乱。</li>
+      </ul>
+      <h4>关于无损</h4>
+      <ul>
+        <li>三种算法均为整像素可逆变换，不经过有损压缩。还原完成后工具会逐像素比对并给出「像素一致性」结果，应为 100%（差异 0）。</li>
+        <li>下载的混淆图 / 还原图使用 PNG 格式保存，PNG 为无损格式，下载后再传回来仍可还原。</li>
+      </ul>
+      <h4>使用提示</h4>
+      <ul>
+        <li>密钥（迭代次数 / 随机种子 / 块大小）是还原的前提：混淆后请记住密钥，或直接使用当前页面内的「反混淆还原」按钮。</li>
+        <li>更换图片或修改参数后重新生成混淆图，旧的混淆结果会被覆盖。</li>
+        <li>所有计算都在浏览器本地完成，图片不会被上传到任何服务器。</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+'use strict';
+
+/* ================= 工具函数 ================= */
+const $ = (id) => document.getElementById(id);
+let toastTimer = null;
+
+function toast(msg, type) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || 'info');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 2600);
+}
+
+// 字符串 -> 32 位随机种子（cyrb53 风格混合器）
+function hashSeed(str) {
+  let h1 = 0xdeadbeef ^ str.length, h2 = 0x41c6ce57 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0);
+}
+
+// 确定性伪随机数生成器（相同种子可复现）
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function copyPixel(src, si, dst, di) {
+  dst[di] = src[si]; dst[di + 1] = src[si + 1];
+  dst[di + 2] = src[si + 2]; dst[di + 3] = src[si + 3];
+}
+
+/* ================= 变换算法 =================
+   像素数组为 RGBA 顺序的 Uint8ClampedArray。
+   正向：out[sigma(i)] = in[i]
+   逆向：out[i] = in[sigma(i)]（同样的 sigma 由确定性种子重新生成）
+   两个循环结构相同，仅读写方向互换。
+*/
+
+// Arnold 猫脸变换索引：(x, y) -> (x+y, x+2y) mod S，作用于边长为 S 的正方形。
+function arnoldIndex(i, S) {
+  const x = i % S, y = (i / S) | 0;
+  return ((x + y) % S) + (((x + 2 * y) % S) * S);
+}
+
+function arnoldTransform(data, S, iters, inverse) {
+  let src = data;
+  const n = S * S;
+  for (let k = 0; k < iters; k++) {
+    const dst = new Uint8ClampedArray(src.length);
+    for (let i = 0; i < n; i++) {
+      const j = arnoldIndex(i, S);
+      if (inverse) copyPixel(src, j * 4, dst, i * 4);
+      else copyPixel(src, i * 4, dst, j * 4);
+    }
+    src = dst;
+  }
+  return src;
+}
+
+function makePermutation(n, seed) {
+  const rng = mulberry32(seed);
+  const p = new Uint32Array(n);
+  for (let i = 0; i < n; i++) p[i] = i;
+  for (let i = n - 1; i > 0; i--) {
+    const j = (rng() * (i + 1)) | 0;
+    const t = p[i]; p[i] = p[j]; p[j] = t;
+  }
+  return p;
+}
+
+function permutePixels(data, perm, inverse) {
+  const dst = new Uint8ClampedArray(data.length);
+  const n = data.length / 4;
+  for (let i = 0; i < n; i++) {
+    const j = perm[i];
+    if (inverse) copyPixel(data, j * 4, dst, i * 4);
+    else copyPixel(data, i * 4, dst, j * 4);
+  }
+  return dst;
+}
+
+// 分块置乱：作用于补边后的 PW × PH 网格（两者都是 B 的倍数）。
+function blockPermute(src, PW, PH, B, perm, inverse) {
+  const cw = PW / B, ch = PH / B;
+  const dst = new Uint8ClampedArray(src.length);
+  for (let by = 0; by < ch; by++) {
+    for (let bx = 0; bx < cw; bx++) {
+      const k = by * cw + bx;          // source block index
+      const j = perm[k];               // destination block index
+      const dbx = j % cw, dby = (j / cw) | 0;
+      for (let oy = 0; oy < B; oy++) {
+        for (let ox = 0; ox < B; ox++) {
+          const a = ((bx * B + ox) + (by * B + oy) * PW) * 4;   // position in block k
+          const b = ((dbx * B + ox) + (dby * B + oy) * PW) * 4; // position in block j
+          if (inverse) copyPixel(src, b, dst, a);
+          else copyPixel(src, a, dst, b);
+        }
+      }
+    }
+  }
+  return dst;
+}
+
+function cropPixels(src, sw, w, h) {
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      copyPixel(src, (x + y * sw) * 4, out, (x + y * w) * 4);
+    }
+  }
+  return out;
+}
+
+/* ================= 画布工具 ================= */
+function drawToCanvas(cv, data, w, h) {
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  img.data.set(data);
+  ctx.putImageData(img, 0, 0);
+  cv.closest('.canvas-wrap').querySelector('.ph').style.display = 'none';
+}
+
+function clearCanvas(cv) {
+  cv.width = 1; cv.height = 1;
+  const wrap = cv.closest('.canvas-wrap');
+  if (wrap) wrap.querySelector('.ph').style.display = '';
+}
+
+/* ================= 状态 ================= */
+const state = {
+  loaded: false,
+  origW: 0, origH: 0,
+  origData: null,           // 原图像的 Uint8ClampedArray
+  scramData: null, scramW: 0, scramH: 0,
+  params: null,             // 生成混淆图时使用的参数 {method, ...}
+  restored: false,
+};
+
+const METHOD_NAMES = { arnold: 'Arnold 猫脸变换', pixel: '像素随机置乱', block: '分块置乱' };
+
+/* ================= 界面逻辑 ================= */
+function currentMethod() {
+  const checked = document.querySelector('input[name="method"]:checked');
+  return checked ? checked.value : 'arnold';
+}
+
+function setParamVisibility() {
+  const m = currentMethod();
+  $('params-arnold').classList.toggle('hidden', m !== 'arnold');
+  $('params-pixel').classList.toggle('hidden', m !== 'pixel');
+  $('params-block').classList.toggle('hidden', m !== 'block');
+  document.querySelectorAll('.method').forEach((el) => {
+    el.classList.toggle('selected', el.dataset.method === m);
+  });
+  updateKeyNote();
+}
+
+function updateKeyNote() {
+  const m = currentMethod();
+  let hint;
+  if (m === 'arnold') {
+    hint = '密钥 = 迭代次数 N：当前 ' + (parseInt($('arnold-iters').value, 10) || 8) + ' 次';
+  } else if (m === 'pixel') {
+    hint = '密钥 = 随机种子：' + ($('pixel-seed').value.trim() || '（留空将自动生成）');
+  } else {
+    hint = '密钥 = 随机种子 + 块大小：' + ($('block-seed').value.trim() || '（留空将自动生成）')
+      + ' · ' + (parseInt($('block-size').value, 10) || 32) + ' px';
+  }
+  if (state.params) {
+    const p = state.params;
+    let used;
+    if (p.method === 'arnold') used = 'Arnold × ' + p.iters + ' 次';
+    else if (p.method === 'pixel') used = '像素置乱 · 种子 ' + p.seed;
+    else used = '分块置乱 · 种子 ' + p.seed + ' · ' + p.B + ' px';
+    $('key-line1').textContent = '已生成混淆图 · 密钥：' + used;
+    $('key-line2').textContent = '反混淆还原将使用该密钥（此后修改参数不影响还原）';
+  } else {
+    $('key-line1').textContent = '尚未生成混淆图';
+    $('key-line2').textContent = hint;
+  }
+}
+
+function updateButtons() {
+  $('btn-scramble').disabled = !state.loaded;
+  $('btn-restore').disabled = !(state.loaded && state.scramData);
+  $('btn-reset').disabled = !state.loaded;
+  $('btn-dl-orig').disabled = !state.loaded;
+  $('btn-dl-scram').disabled = !state.scramData;
+  $('btn-dl-restored').disabled = !state.restored;
+  updateSteps();
+}
+
+// Progress stepper: 载入图片 -> 生成混淆图 -> 反混淆还原
+function updateSteps() {
+  const done1 = state.loaded;
+  const done2 = !!state.scramData;
+  const done3 = state.restored;
+  $('step-1').classList.toggle('done', done1);
+  $('step-2').classList.toggle('done', done2);
+  $('step-3').classList.toggle('done', done3);
+  $('step-1').classList.toggle('current', !done1);
+  $('step-2').classList.toggle('current', done1 && !done2);
+  $('step-3').classList.toggle('current', done2 && !done3);
+  $('line-1').classList.toggle('done', done1);
+  $('line-2').classList.toggle('done', done2);
+  $('st1-txt').textContent = done1 ? '已完成' : '待操作';
+  $('st2-txt').textContent = done2 ? '已完成' : (done1 ? '待操作' : '等待图片');
+  $('st3-txt').textContent = done3 ? '已完成' : (done2 ? '待操作' : '等待混淆');
+}
+
+function resolveSeed(inputId) {
+  const input = $(inputId);
+  let v = input.value.trim();
+  if (!v) {
+    v = 'k' + Math.random().toString(36).slice(2, 10);
+    input.value = v;
+  }
+  return v;
+}
+
+/* ================= 核心操作 ================= */
+function doScramble() {
+  if (!state.loaded) { toast('请先载入图片', 'warn'); return; }
+  const t0 = performance.now();
+  const method = currentMethod();
+  const params = { method };
+  let data, outW, outH, note = null;
+
+  if (method === 'arnold') {
+    params.iters = parseInt($('arnold-iters').value, 10) || 8;
+    const S = Math.max(state.origW, state.origH);
+    if (S !== state.origW || S !== state.origH) note = '非方形图片已补透明边，混淆图尺寸为 ' + S + ' × ' + S;
+    const padded = new Uint8ClampedArray(S * S * 4);
+    for (let y = 0; y < state.origH; y++) {
+      for (let x = 0; x < state.origW; x++) {
+        copyPixel(state.origData, (x + y * state.origW) * 4, padded, (x + y * S) * 4);
+      }
+    }
+    data = arnoldTransform(padded, S, params.iters, false);
+    outW = S; outH = S;
+  } else if (method === 'pixel') {
+    params.seed = resolveSeed('pixel-seed');
+    const perm = makePermutation(state.origW * state.origH, hashSeed(params.seed));
+    params.perm = perm;
+    data = permutePixels(state.origData, perm, false);
+    outW = state.origW; outH = state.origH;
+  } else {
+    params.seed = resolveSeed('block-seed');
+    params.B = Math.min(parseInt($('block-size').value, 10) || 32, state.origW, state.origH);
+    const cw = Math.ceil(state.origW / params.B), ch = Math.ceil(state.origH / params.B);
+    params.cw = cw; params.ch = ch;
+    params.PW = cw * params.B; params.PH = ch * params.B;
+    if (params.PW !== state.origW || params.PH !== state.origH) note = '边角不足处已补透明像素';
+    const perm = makePermutation(cw * ch, hashSeed(params.seed));
+    params.perm = perm;
+    const padded = new Uint8ClampedArray(params.PW * params.PH * 4);
+    for (let y = 0; y < state.origH; y++) {
+      for (let x = 0; x < state.origW; x++) {
+        copyPixel(state.origData, (x + y * state.origW) * 4, padded, (x + y * params.PW) * 4);
+      }
+    }
+    data = blockPermute(padded, params.PW, params.PH, params.B, perm, false);
+    outW = params.PW; outH = params.PH;
+  }
+
+  const ms = performance.now() - t0;
+  state.scramData = data; state.scramW = outW; state.scramH = outH;
+  state.params = params; state.restored = false;
+
+  drawToCanvas($('cv-scram'), data, outW, outH);
+  clearCanvas($('cv-restored'));
+  $('meta-scram').textContent = outW + ' × ' + outH + ' · ' + ms.toFixed(0) + ' ms';
+  $('meta-restored').textContent = '—';
+  $('extra-scram').textContent = note || '';
+  $('status').className = 'status';
+  $('status').textContent = '混淆完成。可调整参数体验不同效果，或直接点击「反混淆还原」。';
+  updateKeyNote();
+  updateButtons();
+  toast('混淆完成：' + METHOD_NAMES[method]);
+}
+
+function doRestore() {
+  if (!state.loaded) { toast('请先载入图片', 'warn'); return; }
+  if (!state.scramData || !state.params) { toast('请先生成混淆图', 'warn'); return; }
+  const p = state.params;
+  const t0 = performance.now();
+  let data;
+
+  if (p.method === 'arnold') {
+    const S = Math.max(state.scramW, state.scramH);
+    const out = arnoldTransform(state.scramData, S, p.iters, true);
+    data = cropPixels(out, S, state.origW, state.origH);
+  } else if (p.method === 'pixel') {
+    data = permutePixels(state.scramData, p.perm, true);
+  } else {
+    const out = blockPermute(state.scramData, p.PW, p.PH, p.B, p.perm, true);
+    data = cropPixels(out, p.PW, state.origW, state.origH);
+  }
+
+  const ms = performance.now() - t0;
+  drawToCanvas($('cv-restored'), data, state.origW, state.origH);
+
+  const total = data.length;
+  let diff = 0;
+  for (let i = 0; i < total; i++) if (data[i] !== state.origData[i]) diff++;
+  state.restored = diff === 0;
+  const pct = total ? (100 * (total - diff) / total) : 100;
+
+  $('meta-restored').textContent = state.origW + ' × ' + state.origH + ' · ' + ms.toFixed(0) + ' ms';
+  $('extra-restored').textContent = '';
+  $('status').className = 'status ' + (state.restored ? 'ok' : 'warn');
+  $('status').textContent = state.restored
+    ? '无损还原：与原始图像逐像素一致（差异 0 · 一致性 100%）'
+    : '还原校验未通过：像素差异 ' + diff + ' 个（一致性 ' + pct.toFixed(2) + '%）。请确认密钥与生成混淆图时一致。';
+  updateButtons();
+  toast(state.restored ? '已无损还原' : '还原完成，但存在像素差异', state.restored ? 'ok' : 'warn');
+}
+
+function doReset() {
+  state.loaded = false;
+  state.origData = null; state.origW = 0; state.origH = 0;
+  state.scramData = null; state.scramW = 0; state.scramH = 0;
+  state.params = null; state.restored = false;
+  clearCanvas($('cv-orig')); clearCanvas($('cv-scram')); clearCanvas($('cv-restored'));
+  $('meta-orig').textContent = '—'; $('meta-scram').textContent = '—'; $('meta-restored').textContent = '—';
+  $('extra-scram').textContent = ''; $('extra-restored').textContent = '';
+  $('status').className = 'status';
+  $('status').textContent = '载入图片后即可开始：生成混淆图 → 反混淆还原';
+  updateKeyNote(); updateButtons();
+  toast('已重置');
+}
+
+/* ================= 图片载入 ================= */
+function loadFromFile(file) {
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast('请选择图片文件', 'warn'); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { initFromImage(img); URL.revokeObjectURL(url); };
+  img.onerror = () => { toast('图片解码失败，请换一张', 'warn'); URL.revokeObjectURL(url); };
+  img.src = url;
+}
+
+function initFromImage(img) {
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  if (!w || !h) { toast('无法读取图片尺寸', 'warn'); return; }
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  let id;
+  try { id = ctx.getImageData(0, 0, w, h); }
+  catch (e) { toast('读取像素失败：' + e.message, 'warn'); return; }
+
+  state.origData = new Uint8ClampedArray(id.data);
+  state.origW = w; state.origH = h;
+  state.loaded = true;
+  state.scramData = null; state.scramW = 0; state.scramH = 0;
+  state.params = null; state.restored = false;
+
+  drawToCanvas($('cv-orig'), state.origData, w, h);
+  clearCanvas($('cv-scram')); clearCanvas($('cv-restored'));
+  $('meta-orig').textContent = w + ' × ' + h + ' px';
+  $('meta-scram').textContent = '—'; $('meta-restored').textContent = '—';
+  $('extra-scram').textContent = ''; $('extra-restored').textContent = '';
+  $('status').className = 'status';
+  $('status').textContent = '已载入 ' + w + ' × ' + h + ' 图片，可开始混淆。';
+  updateKeyNote(); updateButtons();
+  if (w * h > 12000000) toast('图片较大，处理可能稍慢', 'warn');
+  else toast('已载入图片 ' + w + ' × ' + h);
+}
+
+function makeExampleCanvas() {
+  const W = 480, H = 480;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#0ea5e9'); grad.addColorStop(0.5, '#22d3ee'); grad.addColorStop(1, '#f472b6');
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  g.strokeStyle = 'rgba(255,255,255,0.92)'; g.lineWidth = 18;
+  g.beginPath(); g.arc(130, 130, 62, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.85)';
+  g.fillRect(300, 84, 108, 108);
+  g.fillStyle = 'rgba(253,224,71,0.95)';
+  g.beginPath(); g.moveTo(96, 296); g.lineTo(238, 412); g.lineTo(62, 412); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(15,23,42,0.5)';
+  for (let i = 0; i < 16; i++) g.fillRect(i * 30, 438, 15, 42);
+  g.fillStyle = '#0f172a'; g.font = 'bold 46px "Microsoft YaHei","PingFang SC",sans-serif';
+  g.textAlign = 'center'; g.fillText('混淆测试', 240, 250);
+  g.font = 'bold 18px Consolas,monospace'; g.fillStyle = 'rgba(255,255,255,0.92)';
+  g.fillText('SCRAMBLE RESTORE', 240, 282);
+  return c;
+}
+
+/* ================= 下载 ================= */
+function downloadCanvas(cv, name) {
+  if (!cv.width || cv.width === 1) { toast('没有可下载的内容', 'warn'); return; }
+  cv.toBlob((blob) => {
+    if (!blob) { toast('生成文件失败', 'warn'); return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  }, 'image/png');
+}
+
+/* ================= 初始化 ================= */
+document.addEventListener('DOMContentLoaded', () => {
+  const dz = $('dropzone');
+  const fileInput = $('file-input');
+  dz.addEventListener('click', () => fileInput.click());
+  dz.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault(); dz.classList.remove('dragover');
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadFromFile(f);
+  });
+  fileInput.addEventListener('change', () => {
+    loadFromFile(fileInput.files[0]);
+    fileInput.value = '';
+  });
+
+  $('btn-demo').addEventListener('click', () => initFromImage(makeExampleCanvas()));
+
+  document.querySelectorAll('input[name="method"]').forEach((r) => {
+    r.addEventListener('change', setParamVisibility);
+  });
+  $('arnold-iters').addEventListener('input', () => {
+    $('arnold-iters-val').textContent = $('arnold-iters').value;
+    updateKeyNote();
+  });
+  $('pixel-seed').addEventListener('input', updateKeyNote);
+  $('block-seed').addEventListener('input', updateKeyNote);
+  $('block-size').addEventListener('change', updateKeyNote);
+
+  $('btn-scramble').addEventListener('click', doScramble);
+  $('btn-restore').addEventListener('click', doRestore);
+  $('btn-reset').addEventListener('click', doReset);
+  $('btn-dl-orig').addEventListener('click', () => downloadCanvas($('cv-orig'), '原图.png'));
+  $('btn-dl-scram').addEventListener('click', () => downloadCanvas($('cv-scram'), '混淆图.png'));
+  $('btn-dl-restored').addEventListener('click', () => downloadCanvas($('cv-restored'), '还原图.png'));
+
+  setParamVisibility();
+  updateButtons();
+  updateKeyNote();
+});
+</script>
+</body>
+</html>
